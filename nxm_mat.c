@@ -56,7 +56,7 @@ void mat_scalar(Matrix *m, double scalar){
 }
 
 double mat_get_element(const Matrix *m, size_t i, size_t j){
-    return m->data[(i * m->size) + j];
+    return m->data[(i * m->cols) + j];
 }
 
 
@@ -85,6 +85,14 @@ int main(int argv, char *argc[]){
     for(size_t i = 0; i < p->size; i++){
         p->data[i] = (i + 1);
     }
+
+
     
     mat_print(p);
+
+    for(size_t i = 0; i < p->rows; i++){
+        for(size_t j = 0; j < p->cols; j++){
+            printf("%d : %f\n",(int)((i * p->cols) + j) , mat_get_element(p, i, j));
+        }
+    }
 }
