@@ -35,7 +35,7 @@ void mat_add(Matrix *dst, const Matrix *a, const Matrix *b){
             dst->data[i] = a->data[i] + b->data[i];
         }
     } else {
-        printf("Cannot add matrices with mismatched dimensions.\n");
+        printf("Cannot add matrices - dimension mismatch.\n");
     }
 }
 
@@ -45,7 +45,7 @@ void mat_hadamard(Matrix *dst, const Matrix *a, const Matrix *b){
             dst->data[i] = a->data[i] * b->data[i];
         }
     } else {
-        printf("Cannot take the hadamard product of matrices with mismatched dimensions.\n");
+        printf("Cannot take the hadamard product of matrices - dimension mismatch.\n");
     }
 }
 
@@ -61,33 +61,62 @@ double mat_get_element(const Matrix *m, size_t i, size_t j){
 
 
 size_t mat_get_index(const Matrix *m, size_t i, size_t j){
-    return (i * m->size) + j;
+    return (i * m->cols) + j;
 }
 
 double mat_mult_sum_helper(const Matrix *a, const Matrix *b, size_t i, size_t j){
     double sum = 0.0;
-    for(size_t k = 0; k < a->rows; k++){
-        sum += a->data[(i * a->rows) + k] * b->data[(k * b->cols) + j];
+
+    for(size_t k = 0; k < a->cols; k++){
+        sum += (a->data[(a->cols * i) + k]) * (b->data[(b->cols * k) + j]);
     }
+
     return sum;
 }
 
-void mat_multiply(Matrix *dst, Matrix *a, Matrix *b){
+Matrix mat_multiply(Matrix *a, Matrix *b){
+
+    //dimension check here.
+
     //needs to consider what the size of the dst matrix should be.
     //Probably should be allocated here,
     //Can be returned as a matrix object. 
     //Whatever calls this will have to be in charge of freeing it. 
-    size_t count = 0;
-    for(size_t i = 0; i < a->rows; i++){
-        for(size_t j = 0; j < b->cols; j++){
-            dst->data[count] = mat_mult_sum_helper(a, b, i, j);
-            count++;
+
+    Matrix m = mat_create(a->rows, b->cols);
+    Matrix *p = &m;
+
+    if(a->cols == b->rows){
+       size_t count = 0;
+    
+        for(size_t i = 0; i < a->rows; i++){
+            for(size_t j = 0; j < b->cols; j++){
+                p->data[count] = mat_mult_sum_helper(a, b, i, j);
+                count++;
+            }
         }
+    } else {
+        printf("Cannot multiply matrices - dimension mismatch."); 
     }
+
+    return m;
 }
 
 void mat_transpose(Matrix *m){
-    //todo: transpose in place
+    double *temp = malloc(m->size * sizeof(double));
+
+    for(size_t i = 0; i < m->rows; i++){
+        for(size_t j = 0; j < m->cols; j++){
+            temp[(j * m->rows) + i] = m->data[(i * m->cols) + j];
+        }
+    }
+
+    memcpy(m->data, temp, m->size * sizeof(double));
+    free(temp);
+
+    size_t tmp = m->rows;
+    m->rows = m->cols;
+    m->cols = tmp;
 }
 
 void mat_print(Matrix *m) {
@@ -103,17 +132,20 @@ void mat_print(Matrix *m) {
     printf("\n");
 }
 
-int main(int argv, char *argc[]){
-    Matrix m1 = mat_create(2,3);
+void test_mat(){
+    Matrix m1 = mat_create(2,5);
     Matrix *p1 = &m1;
 
-    Matrix m2 = mat_create(3,2);
+    Matrix m2 = mat_create(5,2);
     Matrix *p2 = &m2;
 
 
     for(size_t i = 0; i < p1->size; i++){
         p1->data[i] = (i + 1);
-        p2->data[i] = (6 - i);
+    }
+
+    for(size_t i = 0; i < p2->size; i++){
+        p2->data[i] = (10 - i);
     }
 
 
@@ -121,6 +153,20 @@ int main(int argv, char *argc[]){
     mat_print(p1);    
     mat_print(p2);
 
+    Matrix m3 = mat_multiply(p1,p2);
+    Matrix *p3 = &m3;
+
+    mat_print(p3);
+
+    mat_transpose(p3);
+
+    mat_print(p3);
+
     mat_free(p1);
     mat_free(p2);
+    mat_free(p3);
+}
+
+int main(int argv, char *argc[]){
+    test_mat();
 }
