@@ -91,8 +91,9 @@ Matrix mat_create_random(size_t rows, size_t cols){
     m.size = rows * cols;
     m.data = calloc(m.size, sizeof(double));
     Matrix *p = &m;
+    double scale = 1.0 / sqrt((double)cols); //Xavier/Glorot initialization
     for(size_t i = 0; i < p->size; i++){
-        p->data[i] = (double)rand() / ((double)RAND_MAX + 1.0);
+        p->data[i] = (((double)rand() / (double)RAND_MAX) * 2.0 - 1.0) * scale;
     }
     return m;
 }
@@ -248,39 +249,40 @@ Network create_network(){
     n.W2 = mat_create_random(1,2);
     n.b2 = mat_create_random(1,1);
 
+    n.z1 = mat_create(2,1);
+    n.a1 = mat_create(2,1);
+    n.z2 = mat_create(1,1);
+    n.a2 = mat_create(1,1);
+
     return n;
 }
 
-//wow this looks absolutely garbage...
 //Need to save these somewhere for later for backpropogation
 //Might be worth using another external file to do so. 
 //Reading and writing is slow though... might make the imbedded system idea wack. 
 double forward(Network *n, Matrix *input){
+    // z1 = W1 * input + b1
     Matrix *W1 = &n->W1;
     Matrix temp = mat_multiply(W1, input);
-    Matrix *b1 = &n->b1;
-    n->z1 = mat_add(&temp, b1);
+    n->z1 = mat_add(&temp, &n->b1);
     mat_free(&temp);
-    
-    Matrix temp2 = n->z1;
-    mat_apply(&temp2, sigmoid);
-    n->a1 = temp2;
 
+    // a1 = sigmoid(z1)
+    mat_copy(&n->a1, &n->z1);
+    mat_apply(&n->a1, sigmoid);
+
+    // z2 = W2 * a1 + b2
     Matrix *W2 = &n->W2;
-    Matrix temp3 = mat_multiply(W2, &temp2);
-    Matrix *b2 = &n->b2;
-    n->z2 = mat_add(&temp3, b2);
-    mat_free(&temp3);
+    Matrix temp2 = mat_multiply(W2, &n->a1);
+    n->z2 = mat_add(&temp2, &n->b2);
     mat_free(&temp2);
 
-    Matrix temp4 = n->z2;
-    mat_apply(&temp4, sigmoid);
-    n->a2 = temp4;
-    mat_free(&temp4);
+    // a2 = sigmoid(z2)
+    mat_copy(&n->a2, &n->z2);
+    mat_apply(&n->a2, sigmoid);
 
-    //I think a2 is just a double atp... return it?
-    return (double)n->a2.data[0];
-}   
+    return n->a2.data[0];
+} 
 
 
 //--  --  --  --  --  --  --  Testing  --  --  --  --  --  --  --//
@@ -386,14 +388,20 @@ void main(int argc, char *argv[]){
     d.data[0] = 1;
     d.data[1] = 1;
 
+    Matrix e = mat_create(2,1);
+    e.data[0] = 0;
+    e.data[1] = 0;
+
 
     double value1 = forward(&n, &a);
     double value2 = forward(&n, &b);
     double value3 = forward(&n, &c);
     double value4 = forward(&n, &d);
+    double value5 = forward(&n, &e);
 
-    printf("Prediction: XOR(0,0) ~ %.4f\n", value1);
-    printf("Prediction: XOR(0,0) ~ %.4f\n", value2);
-    printf("Prediction: XOR(0,0) ~ %.4f\n", value3);
-    printf("Prediction: XOR(0,0) ~ %.4f\n", value4);
+    printf("Prediction: XOR(0,0) = %.4f\n", value1);
+    printf("Prediction: XOR(0,1) = %.4f\n", value2);
+    printf("Prediction: XOR(1,0) = %.4f\n", value3);
+    printf("Prediction: XOR(1,1) = %.4f\n", value4);
+    printf("Prediction: XOR(0,0) = %.4f\n", value5);
 }
