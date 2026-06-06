@@ -60,8 +60,35 @@ double mat_get_element(const Matrix *m, size_t i, size_t j){
 }
 
 
+size_t mat_get_index(const Matrix *m, size_t i, size_t j){
+    return (i * m->size) + j;
+}
 
+double mat_mult_sum_helper(const Matrix *a, const Matrix *b, size_t i, size_t j){
+    double sum = 0.0;
+    for(size_t k = 0; k < a->rows; k++){
+        sum += a->data[(i * a->rows) + k] * b->data[(k * b->cols) + j];
+    }
+    return sum;
+}
 
+void mat_multiply(Matrix *dst, Matrix *a, Matrix *b){
+    //needs to consider what the size of the dst matrix should be.
+    //Probably should be allocated here,
+    //Can be returned as a matrix object. 
+    //Whatever calls this will have to be in charge of freeing it. 
+    size_t count = 0;
+    for(size_t i = 0; i < a->rows; i++){
+        for(size_t j = 0; j < b->cols; j++){
+            dst->data[count] = mat_mult_sum_helper(a, b, i, j);
+            count++;
+        }
+    }
+}
+
+void mat_transpose(Matrix *m){
+    //todo: transpose in place
+}
 
 void mat_print(Matrix *m) {
     size_t count = 0;
@@ -77,22 +104,23 @@ void mat_print(Matrix *m) {
 }
 
 int main(int argv, char *argc[]){
-    Matrix m = mat_create(2,3);
-    Matrix *p = &m;
+    Matrix m1 = mat_create(2,3);
+    Matrix *p1 = &m1;
 
-    printf("Size: %d\n", (int)p->size);
+    Matrix m2 = mat_create(3,2);
+    Matrix *p2 = &m2;
 
-    for(size_t i = 0; i < p->size; i++){
-        p->data[i] = (i + 1);
+
+    for(size_t i = 0; i < p1->size; i++){
+        p1->data[i] = (i + 1);
+        p2->data[i] = (6 - i);
     }
 
 
     
-    mat_print(p);
+    mat_print(p1);    
+    mat_print(p2);
 
-    for(size_t i = 0; i < p->rows; i++){
-        for(size_t j = 0; j < p->cols; j++){
-            printf("%d : %f\n",(int)((i * p->cols) + j) , mat_get_element(p, i, j));
-        }
-    }
+    mat_free(p1);
+    mat_free(p2);
 }
