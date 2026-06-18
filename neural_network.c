@@ -98,6 +98,31 @@ Matrix mat_create_random(size_t rows, size_t cols){
     return m;
 }
 
+Matrix mat_create_from_file(char *path){
+    FILE *file = fopen(path, "r");
+
+    if(file == NULL){
+        printf("File was null :(\n");
+        //exit / break
+    }
+
+    //Create matrix from file
+    Matrix m;
+    return m;
+}
+
+void mat_save_to_file(char *path, Matrix *m){
+    FILE *file = fopen(path, "w");
+
+    if(file == NULL){
+        printf("File was null :(\n");
+        //exit / break
+    }
+
+    size_t rows = m->rows;
+    size_t cols = m->cols;
+}
+
 void mat_free(Matrix *m){
     free(m->data);
     m->data = NULL;
