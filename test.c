@@ -51,91 +51,9 @@ int number_flip_helper(int n){
 }
 
 Matrix mat_create_from_file(char *path){
-    FILE *file = fopen(path, "r");
-
-    if(file == NULL){
-        printf("File was null :(\n");
-        //exit / break
-    }
-    
-    
-    size_t rows;
-    size_t cols;
-
-    int count = 0;
-    int c;
-
-    
-    int i = 0;
-    while((c = fgetc(file)) != 10){
-        c = c - 48;
-        count += c * pow(10, i);
-        i += 1;
-    }
-
-    count = number_flip_helper(count);
-    rows = (size_t) count;
-
-    count = 0;
-    i = 0;
-    while((c = fgetc(file)) != 10){
-        c = c - 48;
-        count += c * pow(10, i);
-        i += 1;
-    }
-
-    count = number_flip_helper(count);
-    cols = (size_t) count;
-
+    size_t rows = 1;
+    size_t cols = 3;
     Matrix m = mat_create(rows,cols);
-    int j = 0;
-
-    //probably a better way to do this!
-    while((c = fgetc(file)) != EOF){
-        //does this add any value? 
-        if(c == '\n' || c == '\r'){
-            continue;
-        }
-        if(c == 'E'){
-            break;
-        }
-
-        
-        if(c == '-'){
-            //is a negative number
-            double value = 0.0;
-            int i = 0;
-            
-            while((c = fgetc(file)) != 124 && c != EOF){
-                if(c != 46){
-                    value += (c - 48) * pow(10,i);
-                    i++;
-                }
-            }
-            int n = digit_helper((int)value);
-            value = number_flip_helper((int) value);
-            value = (value) / (pow(10,n - 1));
-            value *= -1;
-            m.data[j] = value;
-            j ++;
-        } else {
-            //not a negative number.
-            double value = 0.0;
-            int i = 0;
-            
-            while((c = fgetc(file)) != 124 && c != EOF){
-                if(c != 46){
-                    value += (c - 48) * pow(10,i);
-                    i++;
-                }
-            }
-            int n = digit_helper((int)value);
-            value = number_flip_helper((int) value);
-            value = (value) / (pow(10,n));
-            m.data[j] = value;
-            j ++;
-        }
-    }
     return m;
 }
 
@@ -293,7 +211,6 @@ void main(int argc, char *argv[]){
     mat_print(&m);
     char *p = "Matrix.txt";
     mat_save_to_file(p,&m);
-    mat_free(&m);
     Matrix a = mat_create_from_file(p);
     printf("After\n");
     mat_print(&a);

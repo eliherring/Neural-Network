@@ -98,29 +98,38 @@ Matrix mat_create_random(size_t rows, size_t cols){
     return m;
 }
 
-Matrix mat_create_from_file(char *path){
-    FILE *file = fopen(path, "r");
-
+void mat_save_to_file(char *path, Matrix *m){
+    FILE *file = fopen(path, "wb");
     if(file == NULL){
-        printf("File was null :(\n");
-        //exit / break
+        printf("Could not open file for writing: %s\n", path);
+        return;
     }
 
-    //Create matrix from file
-    Matrix m;
-    return m;
+    fwrite(&m->rows, sizeof(size_t), 1, file);
+    fwrite(&m->cols, sizeof(size_t), 1, file);
+    fwrite(m->data, sizeof(double), m->size, file);
+
+    fclose(file);
 }
 
-void mat_save_to_file(char *path, Matrix *m){
-    FILE *file = fopen(path, "w");
+Matrix mat_create_from_file(char *path){
+    FILE *file = fopen(path, "rb");
+    Matrix m = {0};
 
     if(file == NULL){
-        printf("File was null :(\n");
-        //exit / break
+        printf("Could not open file for reading: %s\n", path);
+        return m;
     }
 
-    size_t rows = m->rows;
-    size_t cols = m->cols;
+    size_t rows, cols;
+    fread(&rows, sizeof(size_t), 1, file);
+    fread(&cols, sizeof(size_t), 1, file);
+
+    m = mat_create(rows, cols);
+    fread(m.data, sizeof(double), m.size, file);
+
+    fclose(file);
+    return m;
 }
 
 void mat_free(Matrix *m){
@@ -145,6 +154,16 @@ Matrix mat_add(const Matrix *a, const Matrix *b){
         printf("Cannot add matrices - dimension mismatch.\n");
     }
     return m;
+}
+
+void mat_add_inplace(Matrix *dst, const Matrix *a, const Matrix *b){
+    if(a->rows == b->rows && a->cols == b->cols){
+        for(size_t i = 0; i < a->size; i++){
+            dst->data[i] = a->data[i] + b->data[i];
+        }
+    } else {
+        printf("Cannot add matrices - dimension mismatch.\n");
+    }
 }
 
 void mat_hadamard(Matrix *dst, const Matrix *a, const Matrix *b){
@@ -238,12 +257,37 @@ void mat_print(Matrix *m) {
     printf("\n");
 }
 
+Matrix mat_transpose_new(const Matrix *m){
+    Matrix t = mat_create(m->cols, m->rows);
+    for(size_t i = 0; i < m->rows; i++){
+        for(size_t j = 0; j < m->cols; j++){
+            t.data[(j * m->rows) + i] = m->data[(i * m->cols) + j];
+        }
+    }
+    return t;
+}
+
+void mat_sub_inplace(Matrix *dst, const Matrix *a, const Matrix *b){
+    if(a->rows == b->rows && a->cols == b->cols){
+        for(size_t i = 0; i < a->size; i++){
+            dst->data[i] = a->data[i] - b->data[i];
+        }
+    } else {
+        printf("Cannot subtract matrices - dimension mismatch.\n");
+    }
+}
+
 
 //--  --  --  --  --  --  --  Functions  --  --  --  --  --  --  --//
 
 
 double sigmoid(double x){
     return 1.0 / (1 + exp(-x));
+}
+
+double sigmoid_deriv(double a){
+    //a is expected to be sigmoid(x)
+    return a * (1.0 - a);
 }
 
 
@@ -282,14 +326,44 @@ Network create_network(){
     return n;
 }
 
-//Need to save these somewhere for later for backpropogation
-//Might be worth using another external file to do so. 
-//Reading and writing is slow though... might make the imbedded system idea wack. 
+void network_save(Network *n, const char *prefix){
+    char path[256];
+
+    snprintf(path, sizeof(path), "%s_W1.bin", prefix);
+    mat_save_to_file(path, &n->W1);
+    snprintf(path, sizeof(path), "%s_b1.bin", prefix);
+    mat_save_to_file(path, &n->b1);
+    snprintf(path, sizeof(path), "%s_W2.bin", prefix);
+    mat_save_to_file(path, &n->W2);
+    snprintf(path, sizeof(path), "%s_b2.bin", prefix);
+    mat_save_to_file(path, &n->b2);
+}
+
+Network network_load(const char *prefix){
+    Network n;
+    char path[256];
+
+    snprintf(path, sizeof(path), "%s_W1.bin", prefix);
+    n.W1 = mat_create_from_file(path);
+    snprintf(path, sizeof(path), "%s_b1.bin", prefix);
+    n.b1 = mat_create_from_file(path);
+    snprintf(path, sizeof(path), "%s_W2.bin", prefix);
+    n.W2 = mat_create_from_file(path);
+    snprintf(path, sizeof(path), "%s_b2.bin", prefix);
+    n.b2 = mat_create_from_file(path);
+
+    n.z1 = mat_create(n.b1.rows, 1);
+    n.a1 = mat_create(n.b1.rows, 1);
+    n.z2 = mat_create(n.b2.rows, 1);
+    n.a2 = mat_create(n.b2.rows, 1);
+
+    return n;
+}
+
 double forward(Network *n, Matrix *input){
     // z1 = W1 * input + b1
-    Matrix *W1 = &n->W1;
-    Matrix temp = mat_multiply(W1, input);
-    n->z1 = mat_add(&temp, &n->b1);
+    Matrix temp = mat_multiply(&n->W1, input);
+    mat_add_inplace(&n->z1, &temp, &n->b1);
     mat_free(&temp);
 
     // a1 = sigmoid(z1)
@@ -297,9 +371,8 @@ double forward(Network *n, Matrix *input){
     mat_apply(&n->a1, sigmoid);
 
     // z2 = W2 * a1 + b2
-    Matrix *W2 = &n->W2;
-    Matrix temp2 = mat_multiply(W2, &n->a1);
-    n->z2 = mat_add(&temp2, &n->b2);
+    Matrix temp2 = mat_multiply(&n->W2, &n->a1);
+    mat_add_inplace(&n->z2, &temp2, &n->b2);
     mat_free(&temp2);
 
     // a2 = sigmoid(z2)
@@ -307,7 +380,62 @@ double forward(Network *n, Matrix *input){
     mat_apply(&n->a2, sigmoid);
 
     return n->a2.data[0];
-} 
+}
+
+void backward(Network *n, Matrix *input, double target, double lr){
+    // ---- output layer ----
+    double error = n->a2.data[0] - target;
+    double d2 = error * n->a2.data[0] * (1.0 - n->a2.data[0]);
+
+    Matrix delta2 = mat_create(1,1);
+    delta2.data[0] = d2;
+
+    Matrix a1_T = mat_transpose_new(&n->a1);        // 1x2
+    Matrix dW2 = mat_multiply(&delta2, &a1_T);       // 1x1 * 1x2 = 1x2
+    mat_free(&a1_T);
+
+    Matrix dW2_scaled = mat_create(dW2.rows, dW2.cols);
+    mat_copy(&dW2_scaled, &dW2);
+    mat_scalar(&dW2_scaled, lr);
+    mat_sub_inplace(&n->W2, &n->W2, &dW2_scaled);
+    mat_free(&dW2);
+    mat_free(&dW2_scaled);
+
+    Matrix db2_scaled = mat_create(1,1);
+    db2_scaled.data[0] = lr * delta2.data[0];
+    mat_sub_inplace(&n->b2, &n->b2, &db2_scaled);
+    mat_free(&db2_scaled);
+
+    // ---- hidden layer ----
+    Matrix W2_T = mat_transpose_new(&n->W2);         // 2x1
+    Matrix backprop1 = mat_multiply(&W2_T, &delta2); // 2x1 * 1x1 = 2x1
+    mat_free(&W2_T);
+
+    Matrix sp1 = mat_create(n->a1.rows, n->a1.cols);
+    mat_copy(&sp1, &n->a1);
+    mat_apply(&sp1, sigmoid_deriv);
+
+    Matrix delta1 = mat_create(n->a1.rows, 1);
+    mat_hadamard(&delta1, &backprop1, &sp1);
+    mat_free(&backprop1);
+    mat_free(&sp1);
+    mat_free(&delta2);
+
+    Matrix input_T = mat_transpose_new(input);       // 1x2
+    Matrix dW1 = mat_multiply(&delta1, &input_T);    // 2x1 * 1x2 = 2x2
+    mat_free(&input_T);
+
+    mat_scalar(&dW1, lr);
+    mat_sub_inplace(&n->W1, &n->W1, &dW1);
+    mat_free(&dW1);
+
+    Matrix db1_scaled = mat_create(delta1.rows, delta1.cols);
+    mat_copy(&db1_scaled, &delta1);
+    mat_scalar(&db1_scaled, lr);
+    mat_sub_inplace(&n->b1, &n->b1, &db1_scaled);
+    mat_free(&db1_scaled);
+    mat_free(&delta1);
+}
 
 
 //--  --  --  --  --  --  --  Testing  --  --  --  --  --  --  --//
@@ -394,39 +522,55 @@ void test_mat(){
 
 void main(int argc, char *argv[]){
     srand(time(NULL)); //update to time(NULL) later. 
-    //test_vec();
-    //test_mat();
+    Matrix inputs[4];
+    inputs[0] = mat_create(2,1);
+    inputs[0].data[0] = 0; inputs[0].data[1] = 0;
+
+    inputs[1] = mat_create(2,1);
+        inputs[1].data[0] = 0; inputs[1].data[1] = 1;
+
+    inputs[2] = mat_create(2,1);
+    inputs[2].data[0] = 1; inputs[2].data[1] = 0;
+
+    inputs[3] = mat_create(2,1);
+    inputs[3].data[0] = 1; inputs[3].data[1] = 1;
+
+    double targets[4] = {0, 1, 1, 0};
+
     Network n = create_network();
-    Matrix a = mat_create(2,1);
-    a.data[0] = 0;
-    a.data[1] = 0;
 
-    Matrix b = mat_create(2,1);
-    b.data[0] = 0;
-    b.data[1] = 1;
+    printf("\n--- Before training ---\n");
+    for(int i = 0; i < 4; i++){
+        double pred = forward(&n, &inputs[i]);
+        printf("Input (%.0f, %.0f) -> Predicted: %.4f, Target: %.0f\n",
+            inputs[i].data[0], inputs[i].data[1], pred, targets[i]);
+    }
 
-    Matrix c = mat_create(2,1);
-    c.data[0] = 1;
-    c.data[1] = 0;
+    for(int epoch = 0; epoch < 1000000; epoch++){
+        double total_loss = 0.0;
 
-    Matrix d = mat_create(2,1);
-    d.data[0] = 1;
-    d.data[1] = 1;
+        for(int i = 0; i < 4; i++){
+            double pred = forward(&n, &inputs[i]);
+            backward(&n, &inputs[i], targets[i], 0.5);
 
-    Matrix e = mat_create(2,1);
-    e.data[0] = 0;
-    e.data[1] = 0;
+            double err = pred - targets[i];
+            total_loss += err * err;
+        }
 
+        if(epoch % 1000 == 0){
+            //printf("Epoch %d: MSE = %.6f\n", epoch, total_loss / 4.0);
+        }
+    }
 
-    double value1 = forward(&n, &a);
-    double value2 = forward(&n, &b);
-    double value3 = forward(&n, &c);
-    double value4 = forward(&n, &d);
-    double value5 = forward(&n, &e);
+    printf("\n--- After training ---\n");
+    for(int i = 0; i < 4; i++){
+        double pred = forward(&n, &inputs[i]);
+        printf("Input (%.0f, %.0f) -> Predicted: %.4f, Target: %.0f\n",
+            inputs[i].data[0], inputs[i].data[1], pred, targets[i]);
+    }
 
-    printf("Prediction: XOR(0,0) = %.4f\n", value1);
-    printf("Prediction: XOR(0,1) = %.4f\n", value2);
-    printf("Prediction: XOR(1,0) = %.4f\n", value3);
-    printf("Prediction: XOR(1,1) = %.4f\n", value4);
-    printf("Prediction: XOR(0,0) = %.4f\n", value5);
+    
+
+    network_save(&n, "xor2/xor");
+
 }
